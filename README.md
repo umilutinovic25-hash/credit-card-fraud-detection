@@ -1,5 +1,7 @@
 # Credit Card Fraud Detection
 
+![demo](assets/demo.gif)
+
 End-to-end fraud detection on a **highly imbalanced dataset (≈0.17% fraud)** —
 taken further than a notebook:
 
