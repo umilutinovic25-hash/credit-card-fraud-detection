@@ -175,6 +175,12 @@ proba_xgb = xgb.predict_proba(X_test)[:, 1]
 # The 29 features are fed as a sequence of 29 timesteps, letting the recurrent
 # network learn cross-feature interactions in order. Trained with
 # `BCEWithLogitsLoss` on Apple-Silicon GPU (MPS) when available.
+#
+# *Honest framing:* recurrence over a fixed feature vector is not how sequence
+# models are used in production fraud systems — there they consume the
+# cardholder's transaction **history**. The LSTM's role here is to be an
+# architecturally different third voter whose errors are decorrelated from the
+# tree- and distance-based models, which is what makes the ensemble work.
 
 # %%
 lstm = train_lstm(X_res, y_res, epochs=5, seed=RANDOM_STATE)

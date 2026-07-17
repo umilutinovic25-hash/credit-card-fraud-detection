@@ -1,9 +1,16 @@
 # Credit Card Fraud Detection
 
-End-to-end fraud detection system that identifies rare fraudulent transactions in a
-**highly imbalanced dataset (≈0.17% fraud)**. Three models — KNN, XGBoost and an
-LSTM — are combined in a soft-voting ensemble, with SMOTEENN resampling, data
-deduplication and robust feature scaling to handle the extreme class imbalance.
+End-to-end fraud detection on a **highly imbalanced dataset (≈0.17% fraud)** —
+taken further than a notebook:
+
+> **F1 0.82** (tuned ensemble, held-out test set with the true fraud distribution) ·
+> **FastAPI scoring service, measured p50 latency 3.5 ms** with pytest contract tests ·
+> **interactive demo** that simulates a day of bank transactions with a live
+> decision-threshold slider · an honest [limitations section](#limitations--what-production-would-need)
+> covering exactly what separates this from a production system.
+
+Everyone has trained a model on this dataset; this repo also **serves** it,
+**tests** it, **measures** it and knows its own limits.
 
 ## Highlights
 
@@ -12,8 +19,9 @@ deduplication and robust feature scaling to handle the extreme class imbalance.
 - **SMOTEENN resampling** — SMOTE oversampling of the minority class combined with
   Edited Nearest Neighbours cleaning of the noisy class boundary, applied to the
   training set only.
-- **Three complementary models**: distance-based (KNN), gradient-boosted trees
-  (XGBoost) and a recurrent network (LSTM, PyTorch, runs on Apple-Silicon GPU).
+- **Three architecturally different voters**: distance-based (KNN), gradient-boosted
+  trees (XGBoost — the industry standard for tabular fraud) and a recurrent network
+  (LSTM, PyTorch) whose errors are decorrelated from the tree model's.
 - **Soft-voting ensemble** that averages predicted probabilities for robustness.
 - **Threshold tuning** on the precision–recall curve — the operating point is
   treated as a business decision, not a fixed 0.5.
@@ -102,6 +110,34 @@ jupyter notebook notebooks/fraud_detection.ipynb
 
 The dataset (284,807 transactions) is downloaded automatically from
 [OpenML](https://www.openml.org/d/1597) on first run and cached in `data/`.
+
+## Limitations — what production would need
+
+This project covers the full ML lifecycle honestly, on what public data allows.
+A real bank deployment would additionally require:
+
+- **Feature engineering as the main value driver.** V1–V28 are pre-made PCA
+  components. Production systems live off behavioral signals a bank computes
+  itself: transaction velocity (count/amount per hour), deviation from the
+  cardholder's habits, device fingerprint, merchant risk, geo-impossibility.
+- **Serving at scale.** The measured 3.5 ms is a local single-process number.
+  Production means thousands of requests/sec against a feature store with fresh
+  aggregates — and KNN would be the first model cut (it scans the training set
+  per query); XGBoost would carry the load.
+- **Concept drift.** Fraudsters adapt; a model trained once decays in months.
+  Production needs monitoring, scheduled retraining and champion/challenger
+  evaluation — none of which a static dataset can exercise.
+- **Delayed, selective labels.** Banks learn about missed fraud weeks later
+  (chargebacks) and never learn the truth about transactions they blocked. This
+  dataset's clean labels sidestep a hard research problem.
+- **Tiered decisions.** Real systems don't just allow/block — they can step up
+  authentication (3-D Secure), and the cost of an error scales with the amount.
+- **Explainability & rules.** Declines must be explainable to customers and
+  regulators; an ML score always runs alongside a human-maintained rule engine.
+- **About the LSTM**: here it serves as an architecturally different third voter
+  over a fixed feature vector. A production sequence model would instead consume
+  the *cardholder's transaction history* — that is where recurrence actually
+  earns its keep.
 
 ## Dataset
 

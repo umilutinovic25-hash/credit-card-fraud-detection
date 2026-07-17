@@ -29,8 +29,10 @@ class LSTMClassifier(nn.Module):
     """Treats the 29 transaction features as a sequence of length 29.
 
     Each feature becomes one timestep with a single value, letting the LSTM
-    learn interactions across the ordered PCA components. This mirrors the
-    common sequence-model formulation for tabular fraud data.
+    learn interactions across the ordered PCA components. Its role in this
+    project is to be an architecturally different third voter in the ensemble;
+    a production sequence model would consume the cardholder's transaction
+    history instead of a fixed feature vector.
     """
 
     def __init__(self, hidden_size: int = 64, num_layers: int = 1, dropout: float = 0.2):
