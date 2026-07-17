@@ -7,7 +7,7 @@ Two experiences on top of the trained KNN / XGBoost / LSTM ensemble:
      through the ensemble and see what gets caught, missed and falsely flagged,
      with an adjustable decision threshold.
 
-Run:  python app.py
+Run:  python app.py   ->  http://127.0.0.1:7860
 """
 
 import time
@@ -51,42 +51,47 @@ legit_idx = np.where(y_test_arr == 0)[0]
 fraud_idx = np.where(y_test_arr == 1)[0]
 
 EXPLAINER = """
-### Kako ovo radi u stvarnom svetu?
+### How does this work in the real world?
 
-**1. Prevučeš karticu** (ili platiš online) → **2.** bankin sistem u istom trenutku sastavi
-podatke o transakciji (iznos, vreme, lokacija, prodavac, odstupanje od tvojih navika...) →
-**3.** model vrati verovatnoću prevare za par milisekundi → **4.** sistem odluči:
-propusti ✅ / traži SMS potvrdu 📲 / blokiraj i zovi vlasnika 🚨.
+**1. You swipe your card** (or pay online) → **2.** the bank's system instantly assembles
+the transaction data (amount, time, location, merchant, deviation from your habits...) →
+**3.** the model returns a fraud probability within milliseconds → **4.** the system decides:
+allow ✅ / ask for an SMS confirmation 📲 / block and call the cardholder 🚨.
 
-Niko ništa ne kuca ručno — model je nevidljivi carinik kroz koga prođe **svaka** transakcija.
-Ovaj demo simulira baš to: dugme „nasumična transakcija" = „stigla je nova transakcija u sistem".
+Nobody types anything by hand — the model is an invisible customs officer that **every**
+transaction passes through. This demo simulates exactly that: the "random transaction"
+button means "a new transaction just arrived in the system".
 
-### Zašto kolone imaju čudna imena (V1–V28)?
+### Why do the columns have strange names (V1–V28)?
 
-Dataset sadrži **prave transakcije** evropskih korisnika kartica, pa je banka pre objavljivanja
-sve provukla kroz matematičku transformaciju (PCA) koja štiti privatnost. V1–V28 su „šifrovane"
-kombinacije pravih podataka — model na njima odlično radi, ali ključ za dešifrovanje ima samo banka.
-Zato se ovde učitava prava transakcija koju onda možeš da menjaš, umesto unosa „iznos + lokacija".
+The dataset contains **real transactions** by European cardholders, so before publishing
+it the bank ran everything through a mathematical transformation (PCA) that protects
+privacy. V1–V28 are "encrypted" combinations of the real fields — models work well on
+them, but only the bank holds the key. That's why this demo loads a real transaction you
+can then modify, instead of offering an "amount + location" form.
 
-### Ko presuđuje?
+### Who makes the call?
 
-Tri različita modela glasaju nezavisno, pa se glasovi uprosečuju (**ensemble**):
-- **KNN** — „na koga ova transakcija liči?" (poredi sa hiljadama poznatih slučajeva)
-- **XGBoost** — šuma odlučujućih stabala, najjači pojedinačni model
-- **LSTM** — neuronska mreža koja čita feature-e kao sekvencu
+Three different models vote independently and their probabilities are averaged (an
+**ensemble**):
+- **KNN** — "who does this transaction resemble?" (compares against thousands of known cases)
+- **XGBoost** — a forest of decision trees, the strongest single model
+- **LSTM** — a neural network that reads the features as a sequence
 
-Trenirani su na skupu gde je prevara veštački „pojačana" (SMOTEENN), jer u sirovim podacima
-na 578 transakcija dođe samo 1 prevara — premalo da se od nje uči. **Test transakcije koje ovde
-vidiš modeli nikad nisu videli**, i u njima je odnos prevara realan (0,17%).
+They are trained on a set where fraud was synthetically amplified (SMOTEENN), because the
+raw data has just 1 fraud per 578 transactions — too few to learn from. **The test
+transactions you see here were never shown to the models**, and their fraud ratio is the
+real one (0.17%).
 
-### Šta znače brojke u simulaciji?
+### What do the simulation numbers mean?
 
-- **Uhvaćene prevare** — model digao alarm, i stvarno jeste prevara ✔
-- **Propuštene prevare** — prošlo ispod radara (direktan trošak banke)
-- **Lažni alarmi** — legitimna kupovina blokirana (nervozan korisnik na kasi)
+- **Caught fraud** — the model raised an alert, and it really was fraud ✔
+- **Missed fraud** — slipped under the radar (a direct cost to the bank)
+- **False alarms** — a legitimate purchase blocked (an annoyed customer at the register)
 
-**Prag odluke** je poslovna odluka, ne matematička: strožiji carinik (nizak prag) hvata više
-prevara ali maltretira više nevinih kupaca — pomeri klizač i gledaj kako se vaga pomera.
+The **decision threshold** is a business decision, not a mathematical one: a stricter
+customs officer (low threshold) catches more fraud but hassles more innocent customers —
+move the slider and watch the balance shift.
 """
 
 
@@ -104,8 +109,8 @@ def sample_transaction(kind: str):
     return (
         row,
         true,
-        f"📥 Stigla transakcija **#{i}** iz test skupa — modeli je nikad nisu videli, "
-        "a istinu saznaješ tek posle provere.",
+        f"📥 Transaction **#{i}** just arrived from the test set — the models have never "
+        "seen it, and you learn the truth only after the check.",
         "",           # clear previous verdict
         None,         # clear previous label
         pd.DataFrame(),  # clear previous votes
@@ -120,28 +125,29 @@ def predict(table: pd.DataFrame, true_label: int):
     p_lstm = float(lstm_predict_proba(lstm, x)[0])
     p_ens = float(np.mean([p_knn, p_xgb, p_lstm]))
 
-    verdict_label = {"🚨 PREVARA": p_ens, "✅ LEGITIMNA": 1 - p_ens}
+    verdict_label = {"🚨 FRAUD": p_ens, "✅ LEGITIMATE": 1 - p_ens}
 
     votes = pd.DataFrame(
         {
-            "model": ["KNN", "XGBoost", "LSTM", "🏛 ENSEMBLE (prosek)"],
-            "P(prevara)": [f"{p:.1%}" for p in (p_knn, p_xgb, p_lstm, p_ens)],
-            "glas": ["🚨 prevara" if p >= DEFAULT_THRESHOLD else "✅ legit" for p in (p_knn, p_xgb, p_lstm, p_ens)],
+            "model": ["KNN", "XGBoost", "LSTM", "🏛 ENSEMBLE (average)"],
+            "P(fraud)": [f"{p:.1%}" for p in (p_knn, p_xgb, p_lstm, p_ens)],
+            "vote": ["🚨 fraud" if p >= DEFAULT_THRESHOLD else "✅ legit" for p in (p_knn, p_xgb, p_lstm, p_ens)],
         }
     )
 
-    decision = "🚨 **PREVARA** — transakcija se blokira" if p_ens >= DEFAULT_THRESHOLD else "✅ **LEGITIMNA** — transakcija prolazi"
+    decision = ("🚨 **FRAUD** — the transaction gets blocked" if p_ens >= DEFAULT_THRESHOLD
+                else "✅ **LEGITIMATE** — the transaction goes through")
     truth = {
-        1: "🚨 ovo **jeste** bila prevara",
-        0: "✅ ovo **jeste** bila legitimna kupovina",
-        -1: "✍️ vrednosti su ručno izmenjene — istina nije poznata",
+        1: "🚨 this really **was** fraud",
+        0: "✅ this really **was** a legitimate purchase",
+        -1: "✍️ values were edited by hand — the truth is unknown",
     }[true_label]
     correct = ""
     if true_label != -1:
         hit = (p_ens >= DEFAULT_THRESHOLD) == bool(true_label)
-        correct = "→ model je **pogodio** 🎯" if hit else "→ model je **promašio** 💥"
+        correct = "→ the model got it **right** 🎯" if hit else "→ the model got it **wrong** 💥"
 
-    summary = f"### Presuda: {decision}\n\n**Istina:** {truth} {correct}"
+    summary = f"### Verdict: {decision}\n\n**Ground truth:** {truth} {correct}"
     return summary, verdict_label, votes
 
 
@@ -155,7 +161,7 @@ def simulate(n: int, threshold: float):
 
 def restat(idx: list, threshold: float):
     if not idx:
-        return "Prvo pusti transakcije dugmetom iznad. 👆", pd.DataFrame(), pd.DataFrame(), idx
+        return "Run the transactions with the button above first. 👆", pd.DataFrame(), pd.DataFrame(), idx
     return _sim_stats(idx, threshold)
 
 
@@ -176,40 +182,40 @@ def _sim_stats(idx: list, threshold: float):
     recall = caught / n_fraud if n_fraud else 0.0
 
     lines = [
-        f"## 🏦 Prošlo je {n:,} transakcija kroz sistem",
+        f"## 🏦 {n:,} transactions just passed through the system",
         "",
         f"| | |",
         f"|---|---|",
-        f"| 💳 Ukupno transakcija | **{n:,}** |",
-        f"| 🕵️ Stvarnih prevara među njima | **{n_fraud}** ({n_fraud / n:.2%}) |",
-        f"| 🔔 Alarma podignuto | **{n_alerts}** |",
-        f"| ✔ Uhvaćene prevare | **{caught} / {n_fraud}** |",
-        f"| 👻 Propuštene prevare | **{missed}** |",
-        f"| 😤 Lažni alarmi (blokirani nevini) | **{false_alarms}** |",
+        f"| 💳 Total transactions | **{n:,}** |",
+        f"| 🕵️ Real frauds among them | **{n_fraud}** ({n_fraud / n:.2%}) |",
+        f"| 🔔 Alerts raised | **{n_alerts}** |",
+        f"| ✔ Frauds caught | **{caught} / {n_fraud}** |",
+        f"| 👻 Frauds missed | **{missed}** |",
+        f"| 😤 False alarms (innocents blocked) | **{false_alarms}** |",
         "",
     ]
     if n_fraud == 0:
-        lines.append("Danas nije bilo nijedne prevare u uzorku — tako izgleda 0,17%! "
-                     "Povećaj broj transakcija ili pusti novi dan.")
+        lines.append("Not a single fraud in today's sample — that's what 0.17% looks like! "
+                     "Increase the number of transactions or run another day.")
     else:
         lines.append(
-            f"Od svakih 100 alarma, **{precision:.0%}** su stvarne prevare (preciznost); "
-            f"model je uhvatio **{recall:.0%}** svih prevara (odziv)."
+            f"Out of every 100 alerts, **{precision:.0%}** are real fraud (precision); "
+            f"the model caught **{recall:.0%}** of all fraud (recall)."
         )
     if missed == 0 and false_alarms <= 2 and n_fraud > 0:
-        lines.append("\n🏆 Odličan dan: nijedna prevara nije prošla, a skoro niko nevin nije uznemiren.")
+        lines.append("\n🏆 A great day: no fraud got through, and almost no innocent customer was bothered.")
 
     def tx_table(mask, limit=15):
         sel = idx_arr[mask]
         if len(sel) == 0:
-            return pd.DataFrame({"—": ["nema takvih transakcija"]})
+            return pd.DataFrame({"—": ["no such transactions"]})
         sel_probs = ENS_PROBAS[sel]
         order = np.argsort(sel_probs)[::-1][:limit]
         return pd.DataFrame(
             {
-                "transakcija": [f"#{i}" for i in sel[order]],
-                "P(prevara)": [f"{p:.1%}" for p in sel_probs[order]],
-                "istina": ["🚨 prevara" if y_test_arr[i] else "✅ legitimna" for i in sel[order]],
+                "transaction": [f"#{i}" for i in sel[order]],
+                "P(fraud)": [f"{p:.1%}" for p in sel_probs[order]],
+                "truth": ["🚨 fraud" if y_test_arr[i] else "✅ legitimate" for i in sel[order]],
             }
         )
 
@@ -220,65 +226,65 @@ def _sim_stats(idx: list, threshold: float):
 
 # ---------- UI ----------
 
-theme = gr.themes.Soft(primary_hue="red", neutral_hue="slate")
-
-with gr.Blocks(title="Fraud Detection Demo", theme=theme) as demo:
+with gr.Blocks(title="Fraud Detection Demo") as demo:
     gr.Markdown(
         "# 💳 Credit Card Fraud Detection\n"
-        "KNN + XGBoost + LSTM ensemble treniran na 284.807 pravih transakcija (0,17% prevara). "
-        "Sve što vidiš ovde su **prave transakcije iz test skupa** koje modeli nikad nisu videli."
+        "A KNN + XGBoost + LSTM ensemble trained on 284,807 real transactions (0.17% fraud). "
+        "Everything you see here are **real held-out test transactions** the models have never seen."
     )
-    with gr.Accordion("ℹ️ Kako ovo radi? (klikni)", open=False):
+    with gr.Accordion("ℹ️ How does this work? (click)", open=False):
         gr.Markdown(EXPLAINER)
 
     with gr.Tabs():
-        with gr.Tab("🔍 Pojedinačna provera"):
+        with gr.Tab("🔍 Single-transaction check"):
             gr.Markdown(
-                "Učitaj pravu transakciju, pa klikni **Proveri**. Možeš i ručno izmeniti bilo koju "
-                "vrednost u tabeli — npr. učitaj prevaru pa gurni `V14` i `V17` ka nuli i gledaj "
-                "kako verovatnoća prevare pada."
+                "Load a real transaction, then click **Check**. You can also edit any value in "
+                "the table — e.g. load a fraud, push `V14` and `V17` toward zero, and watch the "
+                "fraud probability drop."
             )
             true_state = gr.State(-1)
             with gr.Row():
-                btn_any = gr.Button("🎲 Nasumična transakcija")
-                btn_legit = gr.Button("✅ Nasumična legitimna")
-                btn_fraud = gr.Button("🚨 Nasumična prevara")
+                btn_any = gr.Button("🎲 Random transaction")
+                btn_legit = gr.Button("✅ Random legitimate")
+                btn_fraud = gr.Button("🚨 Random fraud")
             info = gr.Markdown("")
             table = gr.Dataframe(
                 value=X_test.iloc[[0]].round(4),
                 headers=FEATURES,
-                label="Podaci o transakciji (V1–V28 = anonimizovani signali, Amount = skaliran iznos)",
+                label="Transaction data (V1–V28 = anonymized signals, Amount = scaled amount)",
                 interactive=True,
             )
-            btn_predict = gr.Button("🔍 Proveri transakciju", variant="primary", size="lg")
+            btn_predict = gr.Button("🔍 Check the transaction", variant="primary", size="lg")
             summary = gr.Markdown("")
             with gr.Row():
-                verdict = gr.Label(label="Ensemble presuda")
-                votes = gr.Dataframe(label="Kako je ko glasao", interactive=False)
+                verdict = gr.Label(label="Ensemble verdict")
+                votes = gr.Dataframe(label="How each model voted", interactive=False)
 
             outs = [table, true_state, info, summary, verdict, votes]
             btn_any.click(lambda: sample_transaction("any"), outputs=outs)
             btn_legit.click(lambda: sample_transaction("legit"), outputs=outs)
             btn_fraud.click(lambda: sample_transaction("fraud"), outputs=outs)
-            table.input(lambda: (-1, "✍️ Vrednosti izmenjene ručno — istina više nije poznata."), outputs=[true_state, info])
+            table.input(lambda: (-1, "✍️ Values edited by hand — the ground truth is no longer known."),
+                        outputs=[true_state, info])
             btn_predict.click(predict, inputs=[table, true_state], outputs=[summary, verdict, votes])
 
-        with gr.Tab("🏦 Simulacija dana u banci"):
+        with gr.Tab("🏦 A day at the bank"):
             gr.Markdown(
-                "Pusti talas nasumičnih transakcija kroz sistem i vidi bilans dana: koliko je prevara "
-                "uhvaćeno, koliko je prošlo ispod radara i koliko je nevinih kupaca uznemireno. "
-                "Zatim pomeraj **prag odluke** — bilans se preračunava odmah."
+                "Send a wave of random transactions through the system and see the day's balance "
+                "sheet: how much fraud was caught, how much slipped under the radar, and how many "
+                "innocent customers were bothered. Then move the **decision threshold** — the "
+                "balance recomputes instantly."
             )
             sim_state = gr.State([])
             with gr.Row():
-                n_slider = gr.Slider(500, 50000, value=5000, step=500, label="Broj transakcija u danu")
+                n_slider = gr.Slider(500, 50000, value=5000, step=500, label="Transactions per day")
                 thr_slider = gr.Slider(0.05, 0.95, value=0.5, step=0.05,
-                                       label="Prag odluke (nisko = strožiji carinik, visoko = blaži)")
-            btn_sim = gr.Button("▶️ Pusti transakcije", variant="primary", size="lg")
+                                       label="Decision threshold (low = stricter officer, high = laxer)")
+            btn_sim = gr.Button("▶️ Run the transactions", variant="primary", size="lg")
             sim_summary = gr.Markdown("")
             with gr.Row():
-                alerts_df = gr.Dataframe(label="🔔 Podignuti alarmi (top 15 po sumnjivosti)", interactive=False)
-                missed_df = gr.Dataframe(label="👻 Propuštene prevare", interactive=False)
+                alerts_df = gr.Dataframe(label="🔔 Alerts raised (top 15 by suspicion)", interactive=False)
+                missed_df = gr.Dataframe(label="👻 Missed frauds", interactive=False)
 
             btn_sim.click(simulate, inputs=[n_slider, thr_slider],
                           outputs=[sim_summary, alerts_df, missed_df, sim_state])
@@ -286,4 +292,7 @@ with gr.Blocks(title="Fraud Detection Demo", theme=theme) as demo:
                                outputs=[sim_summary, alerts_df, missed_df, sim_state])
 
 if __name__ == "__main__":
-    demo.launch(server_name="127.0.0.1", server_port=7860, inbrowser=False)
+    demo.launch(
+        server_name="127.0.0.1", server_port=7860, inbrowser=False,
+        theme=gr.themes.Soft(primary_hue="red", neutral_hue="slate"),
+    )
