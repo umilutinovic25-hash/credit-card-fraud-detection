@@ -4,6 +4,8 @@ scikit-learn
 xgboost
 imbalanced-learn
 torch
+gradio
+joblib
 matplotlib
 seaborn
 jupyter

@@ -31,9 +31,26 @@ Threshold tuning on the ensemble's precision–recall curve raises F1 to **0.82*
 Full analysis with PR curves and confusion matrices:
 [`notebooks/fraud_detection.ipynb`](notebooks/fraud_detection.ipynb)
 
+## Interactive demo
+
+```bash
+python app.py   # http://127.0.0.1:7860
+```
+
+A Gradio app with two experiences:
+
+- **Single-transaction check** — load a real held-out transaction (or edit any
+  feature value) and watch the three models vote, then reveal the ground truth.
+- **"A day at the bank" simulation** — stream thousands of unseen transactions
+  through the ensemble and see caught frauds, missed frauds and false alarms,
+  with a live decision-threshold slider showing the precision–recall trade-off.
+
+Models are trained and cached on first launch (a few minutes), then start instantly.
+
 ## Project structure
 
 ```
+├── app.py                      # interactive Gradio demo
 ├── notebooks/
 │   └── fraud_detection.ipynb   # full analysis, executed with outputs
 ├── src/
