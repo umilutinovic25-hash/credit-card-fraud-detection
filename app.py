@@ -11,63 +11,22 @@ Run:  python app.py
 """
 
 import time
-from pathlib import Path
 
 import gradio as gr
-import joblib
 import numpy as np
 import pandas as pd
-import torch
 
-from src.data import load_data, preprocess, resample, split
-from src.models import (
-    LSTMClassifier,
-    ensemble_proba,
-    lstm_predict_proba,
-    make_knn,
-    make_xgb,
-    train_lstm,
-)
+from src.artifacts import MODELS_DIR, RANDOM_STATE, load_or_train, load_split
+from src.models import ensemble_proba, lstm_predict_proba
 
-MODELS_DIR = Path(__file__).resolve().parent / "models"
-RANDOM_STATE = 42
 DEFAULT_THRESHOLD = 0.5
 
 print("loading data...")
-df = preprocess(load_data())
-X_train, X_test, y_train, y_test = split(df, random_state=RANDOM_STATE)
+X_train, X_test, y_train, y_test = load_split()
 FEATURES = list(X_test.columns)
 y_test_arr = y_test.values
 
-
-def load_or_train():
-    MODELS_DIR.mkdir(exist_ok=True)
-    knn_path = MODELS_DIR / "knn.joblib"
-    xgb_path = MODELS_DIR / "xgb.json"
-    lstm_path = MODELS_DIR / "lstm.pt"
-
-    if knn_path.exists() and xgb_path.exists() and lstm_path.exists():
-        print("loading cached models...")
-        knn = joblib.load(knn_path)
-        xgb = make_xgb(RANDOM_STATE)
-        xgb.load_model(xgb_path)
-        lstm = LSTMClassifier()
-        lstm.load_state_dict(torch.load(lstm_path, map_location="cpu"))
-        lstm.eval()
-        return knn, xgb, lstm
-
-    print("training models (first run only, a few minutes)...")
-    X_res, y_res = resample(X_train, y_train, random_state=RANDOM_STATE)
-    knn = make_knn().fit(X_res, y_res)
-    xgb = make_xgb(RANDOM_STATE).fit(X_res, y_res)
-    lstm = train_lstm(X_res, y_res, epochs=5, seed=RANDOM_STATE)
-    joblib.dump(knn, knn_path)
-    xgb.save_model(xgb_path)
-    torch.save(lstm.to("cpu").state_dict(), lstm_path)
-    return knn, xgb, lstm
-
-
-knn, xgb, lstm = load_or_train()
+knn, xgb, lstm = load_or_train(X_train=X_train, y_train=y_train)
 
 # Score the whole held-out test set once at startup: the simulation tab then
 # answers threshold changes instantly, and we get an honest throughput number.

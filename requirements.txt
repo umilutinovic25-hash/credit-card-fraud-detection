@@ -5,6 +5,9 @@ xgboost
 imbalanced-learn
 torch
 gradio
+fastapi
+uvicorn
+pytest
 joblib
 matplotlib
 seaborn

@@ -31,6 +31,33 @@ Threshold tuning on the ensemble's precision–recall curve raises F1 to **0.82*
 Full analysis with PR curves and confusion matrices:
 [`notebooks/fraud_detection.ipynb`](notebooks/fraud_detection.ipynb)
 
+## Real-time scoring API
+
+```bash
+uvicorn api:app --port 8000     # interactive docs at http://127.0.0.1:8000/docs
+```
+
+The production shape of a fraud model: the payment switch POSTs transaction
+features, the service answers with a probability and an allow/block decision.
+
+```bash
+# grab a real held-out transaction as a payload, then score it
+curl -s "http://127.0.0.1:8000/example?kind=fraud" | jq .payload > tx.json
+curl -s -X POST http://127.0.0.1:8000/score \
+     -H 'Content-Type: application/json' -d @tx.json
+# {"fraud_probability":0.9994,"decision":"block","threshold":0.5,
+#  "model_probabilities":{"knn":1.0,"xgboost":0.9997,"lstm":0.9984},"latency_ms":2.9}
+```
+
+- **Measured end-to-end latency** (local, 200 sequential requests, full
+  KNN+XGBoost+LSTM ensemble): **p50 3.5 ms, p95 3.8 ms** — comfortably inside a
+  real-time authorization budget (~100 ms).
+- `POST /score/batch` scores up to 10k transactions per call (backfills,
+  offline re-scoring); `GET /example` serves real test payloads for demos.
+- Payloads are validated against the exact 29-feature contract (pydantic),
+  and the OpenAPI schema doubles as documentation.
+- Contract tests in [`tests/test_api.py`](tests/test_api.py) (`pytest`).
+
 ## Interactive demo
 
 ```bash
@@ -50,13 +77,17 @@ Models are trained and cached on first launch (a few minutes), then start instan
 ## Project structure
 
 ```
+├── api.py                      # FastAPI real-time scoring service
 ├── app.py                      # interactive Gradio demo
 ├── notebooks/
 │   └── fraud_detection.ipynb   # full analysis, executed with outputs
 ├── src/
 │   ├── data.py                 # loading, dedup, scaling, split, SMOTEENN
 │   ├── models.py               # KNN, XGBoost, LSTM (PyTorch), ensemble
-│   └── evaluate.py             # metrics, PR curves, confusion matrices, threshold tuning
+│   ├── evaluate.py             # metrics, PR curves, confusion matrices, threshold tuning
+│   └── artifacts.py            # train-once/load-fast model persistence
+├── tests/
+│   └── test_api.py             # API contract tests
 ├── data/                       # dataset cache (auto-downloaded, not committed)
 └── requirements.txt
 ```
